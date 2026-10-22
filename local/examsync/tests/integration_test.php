@@ -124,7 +124,8 @@ final class integration_test extends \advanced_testcase
             $bc->destroy();
         }
 
-        // Match cron: current user is admin, but backup permissions belong to the teacher.
+        // Dispatch tasks run as the publishing teacher, without administrator privileges.
+        $this->setUser($teacher);
         $bundle = package::export($source);
         $this->assertFileExists($bundle['path']);
         $this->assertSame(1, $bundle['manifest']['questioncount']);
@@ -291,7 +292,7 @@ final class integration_test extends \advanced_testcase
     public function test_source_publication_grade_order_and_admission(): void
     {
         global $DB,$CFG;
-        [$m,$quiz,,,$student] = $this->fixture();
+        [$m,$quiz,,,$student,$teacher] = $this->fixture();
         require_once($CFG->dirroot.'/mod/lti/locallib.php');
         require_once($CFG->libdir.'/gradelib.php');
         $typeid = $this->getDataGenerator()->get_plugin_generator('mod_lti')->create_tool_types([
@@ -300,6 +301,9 @@ final class integration_test extends \advanced_testcase
         set_config('role', 'source', 'local_examsync');
         set_config('ltitypeid', $typeid, 'local_examsync');
         set_config('peerurl', 'https://exams.example', 'local_examsync');
+        $m->actorid = (int)$teacher->id;
+        $DB->set_field('local_examsync_map', 'actorid', $m->actorid, ['id' => $m->id]);
+        $this->setUser($teacher);
         $payload = ['uuid' => $m->uuid,'revision' => 1,'tooluuid' => \core\uuid::generate(),'targetcmid' => 77,'targetcourseid' => 33];
         // Fractional maxima cannot be represented by mod_lti; reject before changing the course.
         $DB->set_field('quiz', 'grade', '10.50000', ['id' => $quiz->id]);

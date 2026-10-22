@@ -17,13 +17,15 @@ These are simulated source/target flows within isolated Moodle fixtures. They do
 
 The local two-site lab exposed `error/setting_locked_by_permission` while exporting a quiz for a standard editing teacher. Moodle locks the `users` backup setting at false for a teacher without `moodle/backup:userinfo`; assigning false to that already-disabled setting still throws. ExamSync now leaves already-disabled settings untouched. Settings that are enabled still go through Moodle's normal setter, so permission and configuration locks are not overridden and an enabled locked setting still stops export.
 
-`test_teacher_export_with_permission_locked_user_data` reproduces the teacher-owned backup while cron runs as admin, checks the disabled permission lock, exports the scoped quiz, and verifies that native user records and unrelated questions are excluded. This regression was added after the nine-test runs recorded above; those historical results do not include it. Run it in a disposable Moodle PHPUnit environment before claiming full integration validation of this fix:
+`test_teacher_export_with_permission_locked_user_data` runs the backup as a standard editing teacher, matching the dispatch task's user, checks the disabled permission lock, exports the scoped quiz, and verifies that native user records and unrelated questions are excluded. This regression was added after the nine-test runs recorded above; those historical results do not include it. Run it in a disposable Moodle PHPUnit environment before claiming full integration validation of this fix:
 
 ```bash
 vendor/bin/phpunit --colors=never --filter test_teacher_export_with_permission_locked_user_data public/local/examsync/tests/integration_test.php
 ```
 
 ## Reproduce
+
+PostgreSQL also exposed that Moodle stores quiz maximum grades as decimals but `mod_lti.grade` as an integer. Publication now converts whole-number values such as `10.00000` to an integer. Fractional maximum grades are rejected before creating the LTI activity or hiding the authoring quiz; they are not rounded. Use a non-negative whole-number maximum for remote exams. Students' awarded grades can still be fractional (the suite verifies 8.5 out of 10). The publication test runs as the editing teacher and exercises both rejection and successful grade delivery.
 
 Use a disposable Moodle 5.1 development checkout with its Composer development dependencies. Install both plugin folders with `tools/install.py`. Configure an isolated PHPUnit database prefix and dataroot in Moodle `config.php`; never point PHPUnit at a live site's data.
 
@@ -44,7 +46,7 @@ python3 tools/verify.py
 python3 tools/package.py
 ```
 
-The verification helper checks PHP syntax and XML parsing. The package helper creates two Moodle plugin ZIPs, a complete source ZIP, and SHA-256 checksums under `dist`. GitHub Actions performs those static checks and packages the artifacts. The full Moodle suite must run in a configured Moodle test environment.
+The verification helper checks PHP syntax and XML parsing. The package helper creates two Moodle plugin ZIPs, a complete source ZIP, and SHA-256 checksums under `dist`. GitHub Actions performs those checks and runs the integration suite on Moodle 5.1.3, PHP 8.3 and PostgreSQL 17. It first requires the teacher regression to fail with `setting_locked_by_permission` against the original exporter, then runs the complete suite with the fixed exporter.
 
 ## Before release
 
