@@ -98,6 +98,44 @@ final class integration_test extends \advanced_testcase
         $this->expectException(\InvalidArgumentException::class);
         protocol::baseurl('http://localhost:8080');
     }
+    public function test_teacher_export_with_permission_locked_user_data(): void
+    {
+        global $DB,$CFG;
+        [$source,$quiz,$used,$unused,$student,$teacher] = $this->fixture();
+        $source->actorid = (int)$teacher->id;
+        $DB->set_field('local_examsync_map', 'actorid', $source->actorid, ['id' => $source->id]);
+        $context = \context_course::instance($source->courseid);
+        $this->assertFalse(has_capability('moodle/backup:userinfo', $context, $teacher->id));
+
+        require_once($CFG->dirroot.'/backup/util/includes/backup_includes.php');
+        $bc = new \backup_controller(
+            \backup::TYPE_1ACTIVITY,
+            $source->cmid,
+            \backup::FORMAT_MOODLE,
+            \backup::INTERACTIVE_NO,
+            \backup::MODE_GENERAL,
+            $source->actorid
+        );
+        try {
+            $users = $bc->get_plan()->get_setting('users');
+            $this->assertSame(\base_setting::LOCKED_BY_PERMISSION, $users->get_status());
+            $this->assertFalse((bool)$users->get_value());
+        } finally {
+            $bc->destroy();
+        }
+
+        // Match cron: current user is admin, but backup permissions belong to the teacher.
+        $bundle = package::export($source);
+        $this->assertFileExists($bundle['path']);
+        $this->assertSame(1, $bundle['manifest']['questioncount']);
+        $this->assertSame(1, $bundle['manifest']['slotcount']);
+        $dir = package::directory($source->uuid, $source->revision).'/export';
+        $usersxml = package::xml($dir.'/users.xml');
+        $this->assertSame(0, $usersxml->getElementsByTagName('user')->length);
+        $questions = file_get_contents($dir.'/questions.xml');
+        $this->assertStringContainsString('Used question', $questions);
+        $this->assertStringNotContainsString('UNRELATED QUESTION', $questions);
+    }
     public function test_scoped_package_restore_and_idempotency(): void
     {
         global $DB,$CFG;

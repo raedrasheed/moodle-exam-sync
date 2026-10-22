@@ -13,6 +13,16 @@ Coverage includes event class/callback existence; signed message expiry, tamperi
 
 These are simulated source/target flows within isolated Moodle fixtures. They do not assert that a browser has completed an LTI 1.3 launch across two HTTP servers. The browser/network/local-installation checks remain in [the acceptance checklist](ACCEPTANCE.ar.md).
 
+## Teacher export regression (2026-10-22)
+
+The local two-site lab exposed `error/setting_locked_by_permission` while exporting a quiz for a standard editing teacher. Moodle locks the `users` backup setting at false for a teacher without `moodle/backup:userinfo`; assigning false to that already-disabled setting still throws. ExamSync now leaves already-disabled settings untouched. Settings that are enabled still go through Moodle's normal setter, so permission and configuration locks are not overridden and an enabled locked setting still stops export.
+
+`test_teacher_export_with_permission_locked_user_data` reproduces the teacher-owned backup while cron runs as admin, checks the disabled permission lock, exports the scoped quiz, and verifies that native user records and unrelated questions are excluded. This regression was added after the nine-test runs recorded above; those historical results do not include it. Run it in a disposable Moodle PHPUnit environment before claiming full integration validation of this fix:
+
+```bash
+vendor/bin/phpunit --colors=never --filter test_teacher_export_with_permission_locked_user_data public/local/examsync/tests/integration_test.php
+```
+
 ## Reproduce
 
 Use a disposable Moodle 5.1 development checkout with its Composer development dependencies. Install both plugin folders with `tools/install.py`. Configure an isolated PHPUnit database prefix and dataroot in Moodle `config.php`; never point PHPUnit at a live site's data.

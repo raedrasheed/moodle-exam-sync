@@ -17,3 +17,81 @@ jobs:
         with:
           name: examsync-alpha-packages
           path: dist/
+  moodle-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: moodle
+          POSTGRES_USER: moodle
+          POSTGRES_PASSWORD: moodle-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U moodle -d moodle"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: examsync
+      - uses: actions/checkout@v4
+        with:
+          repository: moodle/moodle
+          ref: v5.1.3
+          path: moodle
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, dom, exif, gd, intl, mbstring, pgsql, soap, sodium, zip
+          ini-values: max_input_vars=5000, memory_limit=512M
+          tools: composer
+          coverage: none
+      - name: Prepare isolated Moodle test site
+        run: |
+          sudo locale-gen en_AU.UTF-8
+          python3 examsync/tools/install.py "$PWD/moodle"
+          mkdir -p "$RUNNER_TEMP/moodledata" "$RUNNER_TEMP/phpunitdata"
+          cat > moodle/config.php <<'PHP'
+          <?php
+          unset($CFG);
+          $CFG = new stdClass();
+          $CFG->dbtype = 'pgsql';
+          $CFG->dblibrary = 'native';
+          $CFG->dbhost = '127.0.0.1';
+          $CFG->dbname = 'moodle';
+          $CFG->dbuser = 'moodle';
+          $CFG->dbpass = 'moodle-ci-only';
+          $CFG->prefix = 'mdl_';
+          $CFG->dboptions = ['dbpersist' => false, 'dbport' => 5432, 'dbsocket' => ''];
+          $CFG->wwwroot = 'http://localhost';
+          $CFG->dataroot = getenv('RUNNER_TEMP').'/moodledata';
+          $CFG->admin = 'admin';
+          $CFG->directorypermissions = 02777;
+          $CFG->phpunit_prefix = 'phpu_';
+          $CFG->phpunit_dataroot = getenv('RUNNER_TEMP').'/phpunitdata';
+          require_once(__DIR__.'/lib/setup.php');
+          PHP
+          composer install --working-dir=moodle --no-interaction --prefer-dist
+          cd moodle
+          php public/admin/tool/phpunit/cli/init.php --disable-composer
+      - name: Verify regression fails on original exporter
+        working-directory: moodle
+        run: |
+          cp public/local/examsync/classes/package.php "$RUNNER_TEMP/examsync-package-fixed.php"
+          git -C ../examsync fetch --no-tags --depth=1 origin 8389c21acc790b2076127d6e384abbe3ecb3450b
+          git -C ../examsync show 8389c21acc790b2076127d6e384abbe3ecb3450b:local/examsync/classes/package.php > public/local/examsync/classes/package.php
+          set +e
+          vendor/bin/phpunit --colors=never --filter test_teacher_export_with_permission_locked_user_data public/local/examsync/tests/integration_test.php > "$RUNNER_TEMP/examsync-original-test.log" 2>&1
+          regression_status=$?
+          set -e
+          cp "$RUNNER_TEMP/examsync-package-fixed.php" public/local/examsync/classes/package.php
+          cat "$RUNNER_TEMP/examsync-original-test.log"
+          test "$regression_status" -ne 0
+          grep -F 'setting_locked_by_permission' "$RUNNER_TEMP/examsync-original-test.log"
+      - name: Run fixed integration suite
+        working-directory: moodle
+        run: vendor/bin/phpunit --colors=never public/local/examsync/tests/integration_test.php
