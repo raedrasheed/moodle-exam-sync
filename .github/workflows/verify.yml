@@ -57,8 +57,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/moodledata" "$RUNNER_TEMP/phpunitdata"
           cat > moodle/config.php <<'PHP'
           <?php
-          global $CFG;
           unset($CFG);
+          global $CFG;
           $CFG = new stdClass();
           $CFG->dbtype = 'pgsql';
           $CFG->dblibrary = 'native';
