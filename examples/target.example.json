@@ -1,0 +1,13 @@
+{
+  "role": "target",
+  "siteid": "exams",
+  "peerid": "main",
+  "peerurl": "http://main.test:8081",
+  "issuer": "http://main.test:8081",
+  "secret": "REPLACE_WITH_SAME_RANDOM_SECRET_ON_BOTH_SITES",
+  "categoryid": 1,
+  "instructorrole": 4,
+  "learnerrole": 5,
+  "maxpackage": 134217728,
+  "labhttp": 1
+}

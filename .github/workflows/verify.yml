@@ -1,0 +1,19 @@
+name: Verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, mbstring
+      - run: python3 tools/verify.py
+      - run: python3 tools/package.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: examsync-alpha-packages
+          path: dist/

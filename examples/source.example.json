@@ -1,0 +1,11 @@
+{
+  "role": "source",
+  "siteid": "main",
+  "peerid": "exams",
+  "peerurl": "http://exams.test:8082",
+  "secret": "REPLACE_WITH_SAME_RANDOM_SECRET_ON_BOTH_SITES",
+  "ltitypeid": 0,
+  "debounce": 30,
+  "maxpackage": 134217728,
+  "labhttp": 1
+}

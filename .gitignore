@@ -1,0 +1,9 @@
+/vendor/
+/.env
+/config.php
+/moodledata/
+/dist/
+/build/
+*.mbz
+*.log
+.phpunit.result.cache

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XMLDB PATH="local/examsync/db" VERSION="20261021" COMMENT="Exam synchronization state">
+  <TABLES>
+    <TABLE NAME="local_examsync_member" COMMENT="Users whose data is held for an exam">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="mapid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" />
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="map-user" TYPE="unique" FIELDS="mapid,userid" />
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="local_examsync_map" COMMENT="local examsync map">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="uuid" TYPE="char" NOTNULL="true" SEQUENCE="false" LENGTH="36" />
+        <FIELD NAME="side" TYPE="char" NOTNULL="true" SEQUENCE="false" LENGTH="8" DEFAULT="source" />
+        <FIELD NAME="courseid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="cmid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="quizid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="revision" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="applied" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="runtimever" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="state" TYPE="char" NOTNULL="true" SEQUENCE="false" LENGTH="20" DEFAULT="draft" />
+        <FIELD NAME="frozen" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="1" DEFAULT="0" />
+        <FIELD NAME="ltiid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="lticmid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="toolid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="actorid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="origvisible" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="1" DEFAULT="1" />
+        <FIELD NAME="metadata" TYPE="text" NOTNULL="false" SEQUENCE="false" />
+        <FIELD NAME="error" TYPE="text" NOTNULL="false" SEQUENCE="false" />
+        <FIELD NAME="timecreated" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="uniq0" TYPE="unique" FIELDS="uuid" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="quizid" UNIQUE="false" FIELDS="quizid" />
+        <INDEX NAME="courseid" UNIQUE="false" FIELDS="courseid" />
+        <INDEX NAME="cmid" UNIQUE="false" FIELDS="cmid" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_examsync_op" COMMENT="local examsync op">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="opkey" TYPE="char" NOTNULL="true" SEQUENCE="false" LENGTH="100" />
+        <FIELD NAME="kind" TYPE="char" NOTNULL="true" SEQUENCE="false" LENGTH="20" />
+        <FIELD NAME="mapid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="revision" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="state" TYPE="char" NOTNULL="true" SEQUENCE="false" LENGTH="20" DEFAULT="pending" />
+        <FIELD NAME="payload" TYPE="text" NOTNULL="false" SEQUENCE="false" />
+        <FIELD NAME="result" TYPE="text" NOTNULL="false" SEQUENCE="false" />
+        <FIELD NAME="error" TYPE="text" NOTNULL="false" SEQUENCE="false" />
+        <FIELD NAME="timecreated" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="uniq0" TYPE="unique" FIELDS="opkey" />
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="local_examsync_nonce" COMMENT="local examsync nonce">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="nonce" TYPE="char" NOTNULL="true" SEQUENCE="false" LENGTH="64" />
+        <FIELD NAME="timecreated" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="uniq0" TYPE="unique" FIELDS="nonce" />
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="local_examsync_dep" COMMENT="local examsync dep">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="mapid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="kind" TYPE="char" NOTNULL="true" SEQUENCE="false" LENGTH="12" />
+        <FIELD NAME="itemid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="uniq0" TYPE="unique" FIELDS="mapid,kind,itemid" />
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="local_examsync_user" COMMENT="local examsync user">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="sourceid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="userid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="uniq0" TYPE="unique" FIELDS="sourceid" />
+        <KEY NAME="uniq1" TYPE="unique" FIELDS="userid" />
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="local_examsync_course" COMMENT="local examsync course">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="sourceid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="courseid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="uniq0" TYPE="unique" FIELDS="sourceid" />
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="local_examsync_grade" COMMENT="local examsync grade">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="mapid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="userid" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="sequence" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="applied" TYPE="int" NOTNULL="true" SEQUENCE="false" LENGTH="10" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="uniq0" TYPE="unique" FIELDS="mapid,userid" />
+      </KEYS>
+    </TABLE>
+  </TABLES>
+</XMLDB>
