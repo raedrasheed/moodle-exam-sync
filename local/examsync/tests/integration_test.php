@@ -98,6 +98,47 @@ final class integration_test extends \advanced_testcase
         $this->expectException(\InvalidArgumentException::class);
         protocol::baseurl('http://localhost:8080');
     }
+    public function test_teacher_export_with_permission_locked_user_data(): void
+    {
+        global $DB,$CFG;
+        [$source,$quiz,$used,$unused,$student,$teacher] = $this->fixture();
+        $source->actorid = (int)$teacher->id;
+        $DB->set_field('local_examsync_map', 'actorid', $source->actorid, ['id' => $source->id]);
+        $context = \context_course::instance($source->courseid);
+        $this->assertFalse(has_capability('moodle/backup:userinfo', $context, $teacher->id));
+
+        require_once($CFG->dirroot.'/backup/util/includes/backup_includes.php');
+        $bc = new \backup_controller(
+            \backup::TYPE_1ACTIVITY,
+            $source->cmid,
+            \backup::FORMAT_MOODLE,
+            \backup::INTERACTIVE_NO,
+            \backup::MODE_GENERAL,
+            $source->actorid
+        );
+        try {
+            $users = $bc->get_plan()->get_setting('users');
+            $this->assertSame(\base_setting::LOCKED_BY_PERMISSION, $users->get_status());
+            $this->assertFalse((bool)$users->get_value());
+        } finally {
+            $bc->destroy();
+        }
+
+        // Dispatch tasks run as the publishing teacher, without administrator privileges.
+        $this->setUser($teacher);
+        $bundle = package::export($source);
+        $this->assertFileExists($bundle['path']);
+        $this->assertSame(1, $bundle['manifest']['questioncount']);
+        $this->assertSame(1, $bundle['manifest']['slotcount']);
+        $dir = package::directory($source->uuid, $source->revision).'/export';
+        // Moodle omits users.xml entirely when no native user records are exported.
+        $usercount = is_file($dir.'/users.xml') ?
+            package::xml($dir.'/users.xml')->getElementsByTagName('user')->length : 0;
+        $this->assertSame(0, $usercount);
+        $questions = file_get_contents($dir.'/questions.xml');
+        $this->assertStringContainsString('Used question', $questions);
+        $this->assertStringNotContainsString('UNRELATED QUESTION', $questions);
+    }
     public function test_scoped_package_restore_and_idempotency(): void
     {
         global $DB,$CFG;
@@ -251,7 +292,7 @@ final class integration_test extends \advanced_testcase
     public function test_source_publication_grade_order_and_admission(): void
     {
         global $DB,$CFG;
-        [$m,$quiz,,,$student] = $this->fixture();
+        [$m,$quiz,,,$student,$teacher] = $this->fixture();
         require_once($CFG->dirroot.'/mod/lti/locallib.php');
         require_once($CFG->libdir.'/gradelib.php');
         $typeid = $this->getDataGenerator()->get_plugin_generator('mod_lti')->create_tool_types([
@@ -260,10 +301,25 @@ final class integration_test extends \advanced_testcase
         set_config('role', 'source', 'local_examsync');
         set_config('ltitypeid', $typeid, 'local_examsync');
         set_config('peerurl', 'https://exams.example', 'local_examsync');
+        $m->actorid = (int)$teacher->id;
+        $DB->set_field('local_examsync_map', 'actorid', $m->actorid, ['id' => $m->id]);
+        $this->setUser($teacher);
         $payload = ['uuid' => $m->uuid,'revision' => 1,'tooluuid' => \core\uuid::generate(),'targetcmid' => 77,'targetcourseid' => 33];
+        // Fractional maxima cannot be represented by mod_lti; reject before changing the course.
+        $DB->set_field('quiz', 'grade', '10.50000', ['id' => $quiz->id]);
+        try {
+            source::publish($m, $payload);
+            $this->fail('Fractional maximum grade was silently truncated');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('whole number', $e->getMessage());
+        }
+        $this->assertSame(0, $DB->count_records('lti', ['course' => $m->courseid]));
+        $this->assertEquals(1, $DB->get_field('course_modules', 'visible', ['id' => $quiz->cmid]));
+        $DB->set_field('quiz', 'grade', '10.00000', ['id' => $quiz->id]);
         source::publish($m, $payload);
         $m = $DB->get_record('local_examsync_map', ['id' => $m->id]);
         $this->assertGreaterThan(0, (int)$m->ltiid);
+        $this->assertEquals(10, $DB->get_field('lti', 'grade', ['id' => $m->ltiid]));
         $this->assertEquals(0, $DB->get_field('course_modules', 'visible', ['id' => $quiz->cmid]));
         $item = \grade_item::fetch(['itemtype' => 'mod','itemmodule' => 'quiz','iteminstance' => $quiz->id,'itemnumber' => 0]);
         $this->assertEquals(GRADE_TYPE_NONE, $item->gradetype);

@@ -39,5 +39,5 @@ for source, dest in destinations:
     print(f"Installed {dest}")
 if backup.exists():
     print(f"Previous plugin copies: {backup}")
-print(f"Next: php {web / 'admin/cli/upgrade.php'} --non-interactive")
+print(f"Next: php {root / 'admin/cli/upgrade.php'} --non-interactive")
 print("Then configure the site role and LTI registration; see docs/LOCAL-LAB.ar.md")

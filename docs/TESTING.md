@@ -8,10 +8,25 @@ The integration suite runs against an installed Moodle PHPUnit database using na
 | --- | --- |
 | Moodle 5.1.3, build 20260216; PHP 8.3.6; MariaDB 10.11.7 | 9 tests, 142 assertions passed |
 | Moodle 5.1.8+, build 20261021; PHP 8.3.6; MariaDB 10.11.7 | 9 tests, 142 assertions passed |
+| Moodle 5.1.3, build 20260216; PHP 8.3.36; PostgreSQL 17.11 | [10 tests, 155 assertions passed](https://github.com/raedrasheed/moodle-exam-sync/actions/runs/39793521470) |
 
 Coverage includes event class/callback existence; signed message expiry, tampering and replay; HTTP lab opt-in; scoped fixed/random question backup; attachment exclusion; native restore; stable resource UUID across replacement; duplicate operation idempotency; LTI account binding reuse; non-editing instructor role; group membership and overrides; suspension; real attempt creation/submission and grade event queueing; refusal to release a freeze with actual attempts; canonical source LTI grade item and grade ordering; source admission and suspended users; privacy erasure of cached mixed-user packages; and new-quiz checkbox persistence.
 
 These are simulated source/target flows within isolated Moodle fixtures. They do not assert that a browser has completed an LTI 1.3 launch across two HTTP servers. The browser/network/local-installation checks remain in [the acceptance checklist](ACCEPTANCE.ar.md).
+
+## Teacher export regression (2026-10-22)
+
+The local two-site lab exposed `error/setting_locked_by_permission` while exporting a quiz for a standard editing teacher. Moodle locks the `users` backup setting at false for a teacher without `moodle/backup:userinfo`; assigning false to that already-disabled setting still throws. ExamSync now leaves already-disabled settings untouched. Settings that are enabled still go through Moodle's normal setter, so permission and configuration locks are not overridden and an enabled locked setting still stops export.
+
+`test_teacher_export_with_permission_locked_user_data` runs the backup as a standard editing teacher, matching the dispatch task's user, checks the disabled permission lock, exports the scoped quiz, and verifies that native user records and unrelated questions are excluded. The PostgreSQL run above confirmed that this test fails with `setting_locked_by_permission` against the original exporter and that all ten tests pass with the fix. The two older MariaDB results do not include this regression. To run it independently in a disposable Moodle PHPUnit environment:
+
+```bash
+vendor/bin/phpunit --colors=never --filter test_teacher_export_with_permission_locked_user_data public/local/examsync/tests/integration_test.php
+```
+
+## PostgreSQL publication regression
+
+PostgreSQL also exposed that Moodle stores quiz maximum grades as decimals but `mod_lti.grade` as an integer. Publication now converts whole-number values such as `10.00000` to an integer. Fractional maximum grades are rejected before creating the LTI activity or hiding the authoring quiz; they are not rounded. Use a non-negative whole-number maximum for remote exams. Students' awarded grades can still be fractional (the suite verifies 8.5 out of 10). The publication test runs as the editing teacher and exercises both rejection and successful grade delivery.
 
 ## Reproduce
 
@@ -34,7 +49,7 @@ python3 tools/verify.py
 python3 tools/package.py
 ```
 
-The verification helper checks PHP syntax and XML parsing. The package helper creates two Moodle plugin ZIPs, a complete source ZIP, and SHA-256 checksums under `dist`. GitHub Actions performs those static checks and packages the artifacts. The full Moodle suite must run in a configured Moodle test environment.
+The verification helper checks PHP syntax and XML parsing. The package helper creates two Moodle plugin ZIPs, a complete source ZIP, and SHA-256 checksums under `dist`. GitHub Actions performs those checks and runs the integration suite on Moodle 5.1.3, PHP 8.3 and PostgreSQL 17. It first requires the teacher regression to fail with `setting_locked_by_permission` against the original exporter, then runs the complete suite with the fixed exporter.
 
 ## Before release
 

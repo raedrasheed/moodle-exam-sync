@@ -189,7 +189,13 @@ final class package
         try {
             foreach (['users','role_assignments','user_files','comments','logs','histories','groups','blocks','calendarevents'] as $name) {
                 if ($bc->get_plan()->setting_exists($name)) {
-                    $bc->get_plan()->get_setting($name)->set_value(0);
+                    $setting = $bc->get_plan()->get_setting($name);
+                    // Moodle can lock excluded data at false for the publishing teacher.
+                    // Even assigning false again throws for a permission/configuration lock.
+                    // Leave disabled settings untouched; enabled locks must still stop export.
+                    if ((bool)$setting->get_value()) {
+                        $setting->set_value(0);
+                    }
                 }
             }
             $bc->execute_plan();
