@@ -9,6 +9,7 @@ The integration suite runs against an installed Moodle PHPUnit database using na
 | Moodle 5.1.3, build 20260216; PHP 8.3.6; MariaDB 10.11.7 | 9 tests, 142 assertions passed |
 | Moodle 5.1.8+, build 20261021; PHP 8.3.6; MariaDB 10.11.7 | 9 tests, 142 assertions passed |
 | Moodle 5.1.3, build 20260216; PHP 8.3.36; PostgreSQL 17.11 | [10 tests, 155 assertions passed](https://github.com/raedrasheed/moodle-exam-sync/actions/runs/39793521470) |
+| Moodle 5.1.3, build 20260216; PHP 8.3.36; PostgreSQL 17.11, question-version fix | [13 tests, 175 assertions passed](https://github.com/raedrasheed/moodle-exam-sync/actions/runs/39824184875) |
 
 Coverage includes event class/callback existence; signed message expiry, tampering and replay; HTTP lab opt-in; scoped fixed/random question backup; attachment exclusion; native restore; stable resource UUID across replacement; duplicate operation idempotency; LTI account binding reuse; non-editing instructor role; group membership and overrides; suspension; real attempt creation/submission and grade event queueing; refusal to release a freeze with actual attempts; canonical source LTI grade item and grade ordering; source admission and suspended users; privacy erasure of cached mixed-user packages; and new-quiz checkbox persistence.
 
@@ -27,6 +28,16 @@ vendor/bin/phpunit --colors=never --filter test_teacher_export_with_permission_l
 ## PostgreSQL publication regression
 
 PostgreSQL also exposed that Moodle stores quiz maximum grades as decimals but `mod_lti.grade` as an integer. Publication now converts whole-number values such as `10.00000` to an integer. Fractional maximum grades are rejected before creating the LTI activity or hiding the authoring quiz; they are not rounded. Use a non-negative whole-number maximum for remote exams. Students' awarded grades can still be fractional (the suite verifies 8.5 out of 10). The publication test runs as the editing teacher and exercises both rejection and successful grade delivery.
+
+## Question version synchronization regression (2026-10-22)
+
+Moodle saves a question edit as a new `question` record and emits `question_created`, retaining the same question-bank entry. The original observer matched only previously exported question IDs and random-pool contexts, so edits to a fixed question could leave the exam at its already-applied revision. The observer now resolves question events through `question_versions.questionbankentryid` and the existing `entry` dependencies. It does not broaden fixed-question dependencies to an entire bank context.
+
+The regression tests save questions through Moodle's question generator and native events. They cover two successive edits by a standard teacher before another export, inclusion of the updated text in the scoped package, no queued synchronization for an unrelated question in the same context, and a single queued revision when a question matches both a fixed slot and a random pool. CI requires the original observer at `aafb48b5ad4b5c635ee0936c5cc37610273d0a0a` to miss the first edit, then runs the full suite with the corrected observer.
+
+[Run 39824184875](https://github.com/raedrasheed/moodle-exam-sync/actions/runs/39824184875) verified commit `cdd42e2ebeb3f9de7510a973fce836f3101884c4`: with the old observer the revision remained 1 instead of increasing to 2; with the fix all 13 tests and 175 assertions passed. Syntax and packaging also passed. The earlier MariaDB results do not include these question-version regression tests.
+
+This change uses existing dependency records and needs no database migration. After installing the updated plugin code and purging caches, make and save a small edit to the affected source question again: an edit missed by the old observer is not replayed automatically. Verify that `revision` increases before running the queued transfer/restore/publication tasks. The browser check must then confirm the changed question text and the unchanged source LTI link.
 
 ## Reproduce
 
@@ -49,7 +60,7 @@ python3 tools/verify.py
 python3 tools/package.py
 ```
 
-The verification helper checks PHP syntax and XML parsing. The package helper creates two Moodle plugin ZIPs, a complete source ZIP, and SHA-256 checksums under `dist`. GitHub Actions performs those checks and runs the integration suite on Moodle 5.1.3, PHP 8.3 and PostgreSQL 17. It first requires the teacher regression to fail with `setting_locked_by_permission` against the original exporter, then runs the complete suite with the fixed exporter.
+The verification helper checks PHP syntax and XML parsing. The package helper creates two Moodle plugin ZIPs, a complete source ZIP, and SHA-256 checksums under `dist`. GitHub Actions performs those checks and runs the integration suite on Moodle 5.1.3, PHP 8.3 and PostgreSQL 17. It requires the teacher regression to fail with `setting_locked_by_permission` against the original exporter and the question-version regression to reproduce the missed revision with the original observer, then runs the complete suite with both fixes.
 
 ## Before release
 
