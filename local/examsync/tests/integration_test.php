@@ -139,6 +139,77 @@ final class integration_test extends \advanced_testcase
         $this->assertStringContainsString('Used question', $questions);
         $this->assertStringNotContainsString('UNRELATED QUESTION', $questions);
     }
+    public function test_question_version_change_queues_sync(): void
+    {
+        global $DB;
+        [$m,$quiz,$used,,,$teacher] = $this->fixture();
+        dependencies::collect($m);
+        $m->actorid = (int)$teacher->id;
+        $m->applied = 1;
+        $m->state = 'ready';
+        $DB->update_record('local_examsync_map', $m);
+        set_config('role', 'source', 'local_examsync');
+        $this->setUser($teacher);
+        $qg = $this->getDataGenerator()->get_plugin_generator('core_question');
+
+        // Use Moodle's real save path and registered question_created observer.
+        $edited = $qg->update_question($used, null, [
+            'questiontext' => ['text' => 'First synchronized edit', 'format' => FORMAT_HTML],
+        ]);
+        $this->assertNotEquals($used->id, $edited->id);
+        $this->assertEquals($used->questionbankentryid, $edited->questionbankentryid);
+        $m = $DB->get_record('local_examsync_map', ['id' => $m->id], '*', MUST_EXIST);
+        $this->assertEquals(2, $m->revision, 'Saving a new question version must queue content synchronization');
+        $this->assertSame('pending', $m->state);
+        $this->assertEquals(1, $m->applied);
+        $this->assertEquals(0, $m->frozen);
+        $task = $DB->get_record('task_adhoc', ['component' => 'local_examsync'], '*', MUST_EXIST);
+        $payload = json_decode($task->customdata, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('sync', $payload['kind']);
+        $this->assertSame((int)$m->id, $payload['mapid']);
+        $this->assertSame(2, $payload['revision']);
+        $this->assertEquals($teacher->id, $task->userid);
+
+        // Repeated edits before an export must still match the original entry dependency.
+        $edited = $qg->update_question($edited, null, [
+            'questiontext' => ['text' => 'Second synchronized edit', 'format' => FORMAT_HTML],
+        ]);
+        $m = $DB->get_record('local_examsync_map', ['id' => $m->id], '*', MUST_EXIST);
+        $this->assertEquals(3, $m->revision);
+        $this->assertSame(2, $DB->count_records('task_adhoc', ['component' => 'local_examsync']));
+        $bundle = package::export($m);
+        $this->assertFileExists($bundle['path']);
+        $xml = file_get_contents(package::directory($m->uuid, $m->revision).'/export/questions.xml');
+        $this->assertStringContainsString('Second synchronized edit', $xml);
+        $this->assertStringNotContainsString('UNRELATED QUESTION', $xml);
+    }
+    public function test_unrelated_question_version_does_not_queue_sync(): void
+    {
+        global $DB;
+        [$m,,,$unused,,$teacher] = $this->fixture();
+        dependencies::collect($m);
+        set_config('role', 'source', 'local_examsync');
+        $this->setUser($teacher);
+        $edited = $this->getDataGenerator()->get_plugin_generator('core_question')->update_question($unused);
+        $this->assertNotEquals($unused->id, $edited->id);
+        $this->assertEquals(1, $DB->get_field('local_examsync_map', 'revision', ['id' => $m->id]));
+        $this->assertSame(0, $DB->count_records('task_adhoc', ['component' => 'local_examsync']));
+    }
+    public function test_question_version_in_fixed_and_random_slots_queues_once(): void
+    {
+        global $DB;
+        [$m,$quiz,$used] = $this->fixture();
+        $structure = \mod_quiz\structure::create_for_quiz(\mod_quiz\quiz_settings::create($quiz->id));
+        $structure->add_random_questions(1, 1, ['filter' => ['category' => [
+            'jointype' => \core\output\datafilter::JOINTYPE_ANY, 'values' => [$used->category],
+            'filteroptions' => ['includesubcategories' => false],
+        ]]]);
+        dependencies::collect($m);
+        set_config('role', 'source', 'local_examsync');
+        $this->getDataGenerator()->get_plugin_generator('core_question')->update_question($used);
+        $this->assertEquals(2, $DB->get_field('local_examsync_map', 'revision', ['id' => $m->id]));
+        $this->assertSame(1, $DB->count_records('task_adhoc', ['component' => 'local_examsync']));
+    }
     public function test_scoped_package_restore_and_idempotency(): void
     {
         global $DB,$CFG;

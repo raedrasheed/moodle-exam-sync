@@ -93,6 +93,20 @@ jobs:
           cat "$RUNNER_TEMP/examsync-original-test.log"
           test "$regression_status" -ne 0
           grep -F 'setting_locked_by_permission' "$RUNNER_TEMP/examsync-original-test.log"
+      - name: Verify question version regression fails on original observer
+        working-directory: moodle
+        run: |
+          cp public/local/examsync/classes/observer.php "$RUNNER_TEMP/examsync-observer-fixed.php"
+          git -C ../examsync fetch --no-tags --depth=1 origin aafb48b5ad4b5c635ee0936c5cc37610273d0a0a
+          git -C ../examsync show aafb48b5ad4b5c635ee0936c5cc37610273d0a0a:local/examsync/classes/observer.php > public/local/examsync/classes/observer.php
+          set +e
+          vendor/bin/phpunit --colors=never --filter test_question_version_change_queues_sync public/local/examsync/tests/integration_test.php > "$RUNNER_TEMP/examsync-original-question-test.log" 2>&1
+          regression_status=$?
+          set -e
+          cp "$RUNNER_TEMP/examsync-observer-fixed.php" public/local/examsync/classes/observer.php
+          cat "$RUNNER_TEMP/examsync-original-question-test.log"
+          test "$regression_status" -ne 0
+          grep -F 'Saving a new question version must queue content synchronization' "$RUNNER_TEMP/examsync-original-question-test.log"
       - name: Run fixed integration suite
         working-directory: moodle
         run: vendor/bin/phpunit --colors=never public/local/examsync/tests/integration_test.php

@@ -45,6 +45,19 @@ final class observer
             '(kind=? AND itemid=?) OR (kind=? AND itemid=?)',
             ['question',(int)$event->objectid,'context',(int)$event->contextid]
         );
+        // Saving an edit creates a new question ID, but keeps the bank entry stable.
+        // Resolve the entry before the next export refreshes the question dependencies.
+        if ($event->objecttable === 'question') {
+            $entryid = $DB->get_field('question_versions', 'questionbankentryid', ['questionid' => $event->objectid]);
+            if ($entryid) {
+                $mapids = array_merge($mapids, $DB->get_fieldset_select(
+                    'local_examsync_dep',
+                    'mapid',
+                    'kind=? AND itemid=?',
+                    ['entry',(int)$entryid]
+                ));
+            }
+        }
         // Category structure and tag changes can change random selection without changing a quiz slot.
         if (str_contains($event->eventname, 'tag_')) {
             $mapids = array_merge($mapids, $DB->get_fieldset_select('local_examsync_dep', 'mapid', 'kind=?', ['context']));
@@ -148,3 +161,4 @@ final class observer
         }
     }
 }
+
