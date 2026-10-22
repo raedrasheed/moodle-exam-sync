@@ -130,8 +130,10 @@ final class integration_test extends \advanced_testcase
         $this->assertSame(1, $bundle['manifest']['questioncount']);
         $this->assertSame(1, $bundle['manifest']['slotcount']);
         $dir = package::directory($source->uuid, $source->revision).'/export';
-        $usersxml = package::xml($dir.'/users.xml');
-        $this->assertSame(0, $usersxml->getElementsByTagName('user')->length);
+        // Moodle omits users.xml entirely when no native user records are exported.
+        $usercount = is_file($dir.'/users.xml') ?
+            package::xml($dir.'/users.xml')->getElementsByTagName('user')->length : 0;
+        $this->assertSame(0, $usercount);
         $questions = file_get_contents($dir.'/questions.xml');
         $this->assertStringContainsString('Used question', $questions);
         $this->assertStringNotContainsString('UNRELATED QUESTION', $questions);
@@ -299,9 +301,21 @@ final class integration_test extends \advanced_testcase
         set_config('ltitypeid', $typeid, 'local_examsync');
         set_config('peerurl', 'https://exams.example', 'local_examsync');
         $payload = ['uuid' => $m->uuid,'revision' => 1,'tooluuid' => \core\uuid::generate(),'targetcmid' => 77,'targetcourseid' => 33];
+        // Fractional maxima cannot be represented by mod_lti; reject before changing the course.
+        $DB->set_field('quiz', 'grade', '10.50000', ['id' => $quiz->id]);
+        try {
+            source::publish($m, $payload);
+            $this->fail('Fractional maximum grade was silently truncated');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('whole number', $e->getMessage());
+        }
+        $this->assertSame(0, $DB->count_records('lti', ['course' => $m->courseid]));
+        $this->assertEquals(1, $DB->get_field('course_modules', 'visible', ['id' => $quiz->cmid]));
+        $DB->set_field('quiz', 'grade', '10.00000', ['id' => $quiz->id]);
         source::publish($m, $payload);
         $m = $DB->get_record('local_examsync_map', ['id' => $m->id]);
         $this->assertGreaterThan(0, (int)$m->ltiid);
+        $this->assertEquals(10, $DB->get_field('lti', 'grade', ['id' => $m->ltiid]));
         $this->assertEquals(0, $DB->get_field('course_modules', 'visible', ['id' => $quiz->cmid]));
         $item = \grade_item::fetch(['itemtype' => 'mod','itemmodule' => 'quiz','iteminstance' => $quiz->id,'itemnumber' => 0]);
         $this->assertEquals(GRADE_TYPE_NONE, $item->gradetype);

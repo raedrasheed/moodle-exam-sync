@@ -81,6 +81,12 @@ final class source
             throw new \RuntimeException('A registered LTI 1.3 tool type is required');
         }
         $quiz = $DB->get_record('quiz', ['id' => $map->quizid], '*', MUST_EXIST);
+        // Quiz grades are decimals; mod_lti.grade is an integer on every database.
+        // Accept values such as "10.00000" without silently truncating fractional maxima.
+        $maxgrade = (float)$quiz->grade;
+        if (!is_finite($maxgrade) || $maxgrade < 0 || floor($maxgrade) !== $maxgrade) {
+            throw new \RuntimeException('Remote exam maximum grade must be a non-negative whole number for Moodle LTI');
+        }
         $cm = get_coursemodule_from_id('quiz', $map->cmid, 0, false, MUST_EXIST);
         $course = get_course($map->courseid);
         $section = $DB->get_field('course_sections', 'section', ['id' => $cm->section], MUST_EXIST);
@@ -88,7 +94,7 @@ final class source
          'typeid' => $typeid,'toolurl' => rtrim(get_config('local_examsync', 'peerurl'), '/').'/enrol/lti/launch.php',
          'instructorcustomparameters' => 'id='.$data['tooluuid'],'instructorchoiceacceptgrades' => LTI_SETTING_ALWAYS,
          'instructorchoicesendname' => LTI_SETTING_ALWAYS,'instructorchoicesendemailaddr' => LTI_SETTING_ALWAYS,
-         'launchcontainer' => LTI_LAUNCH_CONTAINER_WINDOW,'grade' => $quiz->grade,
+         'launchcontainer' => LTI_LAUNCH_CONTAINER_WINDOW,'grade' => (int)$maxgrade,
          'modulename' => 'lti','module' => $DB->get_field('modules', 'id', ['name' => 'lti'], MUST_EXIST),'section' => $section,
          'visible' => $map->origvisible,'visibleoncoursepage' => 1,'availability' => $cm->availability,'groupmode' => 0,
          'groupingid' => 0,'completion' => 0,'cmidnumber' => 'examsync-'.$map->uuid];
